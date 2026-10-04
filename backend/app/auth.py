@@ -1,40 +1,63 @@
-import os
-from datetime import datetime, timedelta, timezone
-import bcrypt
-from jose import jwt, JWTError
+from dataclasses import dataclass
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
-from .database import get_db
-from .models import User
 
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "1440"))
+from .supabase_client import require_supabase
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
-def verify_password(password: str, password_hash: str) -> bool:
-    return bcrypt.checkpw(password.encode(), password_hash.encode())
+@dataclass
+class CurrentUser:
+    id: str
+    email: str
+    name: str
 
-def create_access_token(user_id: int) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_MINUTES)
-    return jwt.encode({"sub": str(user_id), "exp": expire}, JWT_SECRET, algorithm=ALGORITHM)
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
-    credentials_error = HTTPException(
+def _credentials_error() -> HTTPException:
+    return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def get_current_user(token: str = Depends(oauth2_scheme)) -> CurrentUser:
+    """Validate the browser's Supabase access token and return the Supabase user."""
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
-        user_id = int(payload.get("sub"))
-    except (JWTError, TypeError, ValueError):
-        raise credentials_error
-    user = db.get(User, user_id)
-    if not user:
-        raise credentials_error
-    return user
+        supabase = require_supabase()
+        response = supabase.auth.get_user(token)
+        user = response.user
+        if not user:
+            raise _credentials_error()
+
+        user_id = str(user.id)
+        email = (user.email or "").strip().lower()
+        metadata = user.user_metadata or {}
+        name = (metadata.get("full_name") or metadata.get("name") or "").strip()
+
+        # Prefer the profile table because that is now the canonical profile record.
+        try:
+            profile_response = (
+                supabase.table("profiles")
+                .select("full_name")
+                .eq("id", user_id)
+                .limit(1)
+                .execute()
+            )
+            rows = profile_response.data or []
+            if rows and (rows[0].get("full_name") or "").strip():
+                name = rows[0]["full_name"].strip()
+        except Exception as exc:
+            print(f"Profile lookup warning: {exc}")
+
+        if not name:
+            name = email.split("@", 1)[0] if email else "My profile"
+
+        return CurrentUser(id=user_id, email=email, name=name)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(f"Supabase auth validation failed: {type(exc).__name__}: {exc}")
+        raise _credentials_error()

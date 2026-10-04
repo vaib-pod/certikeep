@@ -16,12 +16,49 @@ export default function Dashboard() {
   const [searchActive, setSearchActive] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [indexingDocumentId, setIndexingDocumentId] = useState(null)
 
-  const load = async () => setDocuments(await api.listDocuments())
+  const load = async () => {
+    const nextDocuments = await api.listDocuments()
+    setDocuments(nextDocuments)
+    return nextDocuments
+  }
 
   useEffect(() => {
     load().catch((error) => setMessage(error.message))
   }, [])
+
+  useEffect(() => {
+    if (!indexingDocumentId) return
+
+    let attempts = 0
+    const timer = window.setInterval(async () => {
+      attempts += 1
+      try {
+        const nextDocuments = await load()
+        const target = nextDocuments.find((doc) => doc.id === indexingDocumentId)
+
+        if (target?.ai_indexed) {
+          setIndexingDocumentId(null)
+          setMessage('Uploaded and AI indexed successfully.')
+          window.clearInterval(timer)
+          return
+        }
+
+        if (attempts >= 12) {
+          setIndexingDocumentId(null)
+          window.clearInterval(timer)
+        }
+      } catch {
+        if (attempts >= 12) {
+          setIndexingDocumentId(null)
+          window.clearInterval(timer)
+        }
+      }
+    }, 2500)
+
+    return () => window.clearInterval(timer)
+  }, [indexingDocumentId])
 
   useEffect(() => {
     if (!uploadOpen) return
@@ -107,11 +144,12 @@ export default function Dashboard() {
       setActiveSection(doc.category || form.category)
       setSearchActive(false)
       setResults([])
-      setMessage(
-        doc.ai_indexed
-          ? 'Uploaded and AI indexed successfully.'
-          : 'Document stored successfully. AI indexing is pending/unavailable; you can retry later.',
-      )
+      if (doc.ai_indexed) {
+        setMessage('Uploaded and AI indexed successfully.')
+      } else {
+        setIndexingDocumentId(doc.id)
+        setMessage('Document stored safely in Supabase. AI indexing is continuing in the background.')
+      }
     } catch (error) {
       setMessage(error.message)
     } finally {
@@ -292,7 +330,7 @@ export default function Dashboard() {
                   Cancel
                 </button>
                 <button className="pixel-btn primary" disabled={uploading || !form.file}>
-                  {uploading ? 'Processing...' : 'Upload + AI index'}
+                  {uploading ? 'Uploading...' : 'Upload + AI index'}
                 </button>
               </div>
             </form>

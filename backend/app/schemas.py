@@ -1,49 +1,40 @@
 from datetime import datetime
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel
 
-class RegisterRequest(BaseModel):
-    name: str
-    email: EmailStr
-    password: str
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
 
 class UserOut(BaseModel):
-    id: int
+    id: str
     name: str
     email: str
 
-class DocumentOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
 
-    id: int
+class DocumentOut(BaseModel):
+    id: str
     title: str
     category: str
     original_name: str
-    mime_type: str
+    mime_type: str | None = None
     uploaded_at: datetime
-    ai_indexed: bool
+    ai_indexed: bool = False
+
 
 class SearchResult(DocumentOut):
     score: float
     snippet: str
 
+
 class ChatRequest(BaseModel):
     question: str
 
+
 class ChatSource(BaseModel):
-    document_id: int
+    document_id: str
     title: str
     filename: str
     source_label: str
     snippet: str
     score: float
+
 
 class ChatResponse(BaseModel):
     answer: str
