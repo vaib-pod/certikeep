@@ -4,14 +4,22 @@ import { supabase } from '../supabase'
 import WindowDots from '../components/WindowDots'
 
 export default function Register() {
-  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+  })
+
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+
   const navigate = useNavigate()
 
   const submit = async (e) => {
     e.preventDefault()
+
     setError('')
     setNotice('')
     setLoading(true)
@@ -34,7 +42,9 @@ export default function Register() {
         return
       }
 
-      setNotice('Account created. Check your email to confirm your account, then log in.')
+      setNotice(
+        'Account created. Check your email to confirm your account, then log in.'
+      )
     } catch (err) {
       setError(err.message || 'Could not create account')
     } finally {
@@ -42,10 +52,32 @@ export default function Register() {
     }
   }
 
+  const registerWithGoogle = async () => {
+    setError('')
+    setGoogleLoading(true)
+
+    try {
+      const { error: googleError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
+        },
+      })
+
+      if (googleError) throw googleError
+    } catch (err) {
+      setError(err.message || 'Could not continue with Google')
+      setGoogleLoading(false)
+    }
+  }
+
   return (
     <div className="auth-page page-frame">
       <WindowDots />
-      <div className="brand">CertiKeep<span className="spark">✦</span></div>
+
+      <div className="brand">
+        CertiKeep<span className="spark">✦</span>
+      </div>
 
       <form className="auth-card signup" onSubmit={submit}>
         <h1>Create your vault</h1>
@@ -54,11 +86,27 @@ export default function Register() {
         {error && <div className="error">{error}</div>}
         {notice && <div className="auth-notice">{notice}</div>}
 
+        <button
+          className="google-auth-btn"
+          type="button"
+          onClick={registerWithGoogle}
+          disabled={googleLoading}
+        >
+          <span className="google-icon">G</span>
+          {googleLoading ? 'Connecting...' : 'Continue with Google'}
+        </button>
+
+        <div className="auth-divider">
+          <span>or</span>
+        </div>
+
         <label>
           Full name
           <input
             value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            onChange={(e) =>
+              setForm({ ...form, name: e.target.value })
+            }
             autoComplete="name"
             required
           />
@@ -69,7 +117,9 @@ export default function Register() {
           <input
             type="email"
             value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            onChange={(e) =>
+              setForm({ ...form, email: e.target.value })
+            }
             autoComplete="email"
             required
           />
@@ -81,17 +131,25 @@ export default function Register() {
             type="password"
             minLength="8"
             value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            onChange={(e) =>
+              setForm({ ...form, password: e.target.value })
+            }
             autoComplete="new-password"
             required
           />
         </label>
 
-        <button className="pixel-btn primary" type="submit" disabled={loading}>
+        <button
+          className="pixel-btn primary"
+          type="submit"
+          disabled={loading}
+        >
           {loading ? 'Creating account...' : 'Create Account'}
         </button>
 
-        <small>Already have an account? <Link to="/login">Log in</Link></small>
+        <small>
+          Already have an account? <Link to="/login">Log in</Link>
+        </small>
       </form>
     </div>
   )

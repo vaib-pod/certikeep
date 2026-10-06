@@ -8,6 +8,8 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+
   const navigate = useNavigate()
 
   const submit = async (e) => {
@@ -22,6 +24,7 @@ export default function Login() {
       })
 
       if (signInError) throw signInError
+
       navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err.message || 'Could not log in')
@@ -30,16 +33,52 @@ export default function Login() {
     }
   }
 
+  const loginWithGoogle = async () => {
+    setError('')
+    setGoogleLoading(true)
+
+    try {
+      const { error: googleError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
+        },
+      })
+
+      if (googleError) throw googleError
+    } catch (err) {
+      setError(err.message || 'Could not continue with Google')
+      setGoogleLoading(false)
+    }
+  }
+
   return (
     <div className="auth-page page-frame">
       <WindowDots />
-      <div className="brand">CertiKeep<span className="spark">✦</span></div>
+
+      <div className="brand">
+        CertiKeep<span className="spark">✦</span>
+      </div>
 
       <form className="auth-card" onSubmit={submit}>
         <h1>Welcome back</h1>
         <p>Log in to your CertiKeep account</p>
 
         {error && <div className="error">{error}</div>}
+
+        <button
+          className="google-auth-btn"
+          type="button"
+          onClick={loginWithGoogle}
+          disabled={googleLoading}
+        >
+          <span className="google-icon">G</span>
+          {googleLoading ? 'Connecting...' : 'Continue with Google'}
+        </button>
+
+        <div className="auth-divider">
+          <span>or</span>
+        </div>
 
         <label>
           Email
@@ -63,11 +102,17 @@ export default function Login() {
           />
         </label>
 
-        <button className="pixel-btn primary" type="submit" disabled={loading}>
+        <button
+          className="pixel-btn primary"
+          type="submit"
+          disabled={loading}
+        >
           {loading ? 'Logging in...' : 'Log In →'}
         </button>
 
-        <small>New here? <Link to="/register">Create an account</Link></small>
+        <small>
+          New here? <Link to="/register">Create an account</Link>
+        </small>
       </form>
     </div>
   )
