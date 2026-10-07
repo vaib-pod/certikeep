@@ -127,8 +127,8 @@ async def upload_document(
             pass
         raise HTTPException(503, "Could not save document metadata")
 
-    # Return immediately after durable storage. Gemini indexing continues after
-    # the response so uploads do not feel blocked by AI latency/quota.
+    # Return immediately after durable storage. AI indexing continues in the
+    # background so uploads do not feel blocked by provider latency.
     background_tasks.add_task(index_document, document_id, user.id, False)
     return inserted
 
@@ -143,7 +143,11 @@ def reindex_document(
     try:
         index_document(document_id, user.id, raise_errors=True)
     except Exception as exc:
-        raise HTTPException(503, f"Gemini indexing is currently unavailable: {exc}")
+        print(f"Manual reindex failed: {type(exc).__name__}: {exc}")
+        raise HTTPException(
+            503,
+            "AI indexing is temporarily unavailable. Your document is safely stored; please try again shortly.",
+        )
 
     return _owned_document(document_id, user.id)
 
@@ -171,7 +175,7 @@ def search(
             for score, chunk, doc in hits
         ]
     except Exception as exc:
-        print(f"Gemini/vector search unavailable; using keyword fallback: {exc}")
+        print(f"Vector search unavailable; using keyword fallback: {type(exc).__name__}: {exc}")
         fallback = keyword_search_documents(user.id, q, limit)
         return [
             {
